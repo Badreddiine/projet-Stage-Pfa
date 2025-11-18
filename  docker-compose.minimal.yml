@@ -1,0 +1,116 @@
+
+
+services:
+  # NIVEAU 0 : Base de données
+  postgres_db:
+    image: postgres:15
+    container_name: postgres_db_minimal
+    hostname: postgres_db
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: adminpass
+    volumes:
+      - ./postgres-init/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    networks:
+      - sdsgpi_net_minimal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # NIVEAU 1 : Sécurité
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: keycloak_minimal
+    hostname: keycloak
+    volumes:
+      - ./keycloak.config.json:/opt/keycloak/data/import/realm-config.json
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres_db:5432/keycloak_db
+      KC_DB_USERNAME: keycloak_user
+      KC_DB_PASSWORD: password
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_ENABLED: "true"
+    command: [ "start-dev", "--import-realm" ]
+    ports:
+      - "8181:8080"
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - sdsgpi_net_minimal
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
+
+  # NIVEAU 2 : Annuaire de services
+  discovery-service:
+    build:
+      context: ./services/discovery
+    container_name: discovery_service_minimal
+    hostname: discovery-service
+    ports:
+      - "8761:8761"
+    networks:
+      - sdsgpi_net_minimal
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # NIVEAU 3 : Passerelle
+  gateway:
+    build:
+      context: ./services/gateway
+    container_name: gateway_minimal
+    hostname: gateway
+    ports:
+      - "8080:8080"
+    environment:
+      # Force le bon profil Spring pour charger application-docker.properties
+      - SPRING_PROFILES_ACTIVE=docker
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    networks:
+      - sdsgpi_net_minimal
+
+  # NIVEAU 4 : Service métier
+  equipment-service:
+    build:
+      context: ./services/equipement-service
+    container_name: equipment_service_minimal
+    hostname: equipment-service
+    environment:
+      # Forcer le profil docker ici aussi
+      - SPRING_PROFILES_ACTIVE=docker
+      # On passe les configurations directement, sans dépendre du config-server
+      - SPRING_APPLICATION_NAME=equipment-service
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://admin:admin123@discovery-service:8761/eureka/
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres_db:5432/equipment_db
+      - SPRING_DATASOURCE_USERNAME=equipment_user
+      - SPRING_DATASOURCE_PASSWORD=equipment_password
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - sdsgpi_net_minimal
+
+# Définition d'un réseau séparé pour éviter les conflits
+networks:
+  sdsgpi_net_minimal:
+    driver: bridge

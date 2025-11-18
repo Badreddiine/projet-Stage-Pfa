@@ -1,0 +1,14 @@
+C:\Users\badre\OneDrive\Bureau\backend\SDSGPI-backend\services\config-service\src\main\java\com\sdsgpi\configservice\controller\ServiceRegistryController.java
+C:\Users\badre\OneDrive\Bureau\backend\SDSGPI-backend\services\config-service\src\main\java\com\sdsgpi\configservice\entity\ConfigurationService.java
+C:\Users\badre\OneDrive\Bureau\backend\SDSGPI-backend\services\config-service\src\main\java\com\sdsgpi\configservice\repository\ServiceRegistryRepository.java
+C:\Users\badre\OneDrive\Bureau\backend\SDSGPI-backend\services\config-service\src\main\java\com\sdsgpi\configservice\ConfigServiceApplication.java
+C:\Users\badre\OneDrive\Bureau\backend\SDSGPI-backend\services\config-service\src\main\java\com\sdsgpi\configservice\entity\HistoriqueConfiguration.java
+C:\Users\badre\OneDrive\Bureau\backend\SDSGPI-backend\services\config-service\src\main\java\com\sdsgpi\configservice\controller\ConfigurationSystemeController.java
+C:\Users\badre\OneDrive\Bureau\backend\SDSGPI-backend\services\config-service\src\main\java\com\sdsgpi\configservice\entity\ConfigurationSysteme.java
+C:\Users\badre\OneDrive\Bureau\backend\SDSGPI-backend\services\config-service\src\main\java\com\sdsgpi\configservice\repository\ConfigurationSystemeRepository.java
+C:\Users\badre\OneDrive\Bureau\backend\SDSGPI-backend\services\config-service\src\main\java\com\sdsgpi\configservice\service\ConfigurationSystemService.java
+C:\Users\badre\OneDrive\Bureau\backend\SDSGPI-backend\services\config-service\src\main\java\com\sdsgpi\configservice\entity\ServiceRegistry.java
+C:\Users\badre\OneDrive\Bureau\backend\SDSGPI-backend\services\config-service\src\main\java\com\sdsgpi\configservice\controller\HistoriqueConfigurationController.java
+C:\Users\badre\OneDrive\Bureau\backend\SDSGPI-backend\services\config-service\src\main\java\com\sdsgpi\configservice\service\ServiceRegistryService.java
+C:\Users\badre\OneDrive\Bureau\backend\SDSGPI-backend\services\config-service\src\main\java\com\sdsgpi\configservice\repository\HistoriqueConfigurationRepository.java
+C:\Users\badre\OneDrive\Bureau\backend\SDSGPI-backend\services\config-service\src\main\java\com\sdsgpi\configservice\service\HistoriqueConfigurationService.java

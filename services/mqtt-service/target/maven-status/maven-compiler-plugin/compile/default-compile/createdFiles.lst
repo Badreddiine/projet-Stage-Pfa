@@ -1,0 +1,16 @@
+com\sdsgpi\mqttservice\service\MQTTMessageService.class
+com\sdsgpi\mqttservice\entity\MQTTTopic.class
+com\sdsgpi\mqttservice\service\MQTTTopicService.class
+com\sdsgpi\mqttservice\config\MqttConfig.class
+com\sdsgpi\mqttservice\controller\MQTTClientController.class
+com\sdsgpi\mqttservice\controller\MQTTTopicController.class
+com\sdsgpi\mqttservice\repository\MQTTTopicRepository.class
+com\sdsgpi\mqttservice\service\MqttGatewayService.class
+com\sdsgpi\mqttservice\repository\MQTTMessageRepository.class
+com\sdsgpi\mqttservice\controller\MQTTMessageController.class
+com\sdsgpi\mqttservice\entity\MQTTClient.class
+com\sdsgpi\mqttservice\repository\MQTTClientRepository.class
+com\sdsgpi\mqttservice\service\MQTTClientService.class
+com\sdsgpi\mqttservice\entity\MQTTMessage.class
+com\sdsgpi\mqttservice\handler\MqttMessageHandler.class
+com\sdsgpi\mqttservice\MqttServiceApplication.class

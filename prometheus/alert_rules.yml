@@ -1,0 +1,249 @@
+groups:
+  # ========================================
+  # ALERTES GÉNÉRALES - DISPONIBILITÉ
+  # ========================================
+  - name: service_availability
+    rules:
+      # Service indisponible
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "🚨 Service {{ $labels.job }} est DOWN"
+          description: "Le service {{ $labels.job }} ({{ $labels.application }}) est indisponible depuis plus d'1 minute"
+
+      # Service instable (flapping)
+      - alert: ServiceFlapping
+        expr: changes(up[5m]) > 3
+        for: 2m
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "⚠️ Service {{ $labels.job }} est instable"
+          description: "Le service {{ $labels.job }} a redémarré {{ $value }} fois en 5 minutes"
+
+  # ========================================
+  # ALERTES PERFORMANCES - MICROSERVICES
+  # ========================================
+  - name: microservices_performance
+    rules:
+      # CPU élevé
+      - alert: HighCpuUsage
+        expr: system_cpu_usage > 0.85
+        for: 3m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "🔥 CPU élevé sur {{ $labels.job }}"
+          description: "CPU usage: {{ $value | humanizePercentage }} sur {{ $labels.job }}"
+
+      # Mémoire JVM élevée
+      - alert: HighJvmMemoryUsage
+        expr: (jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}) > 0.85
+        for: 3m
+        labels:
+          severity: warning
+          team: development
+        annotations:
+          summary: "🧠 Mémoire JVM élevée sur {{ $labels.job }}"
+          description: "Mémoire heap: {{ $value | humanizePercentage }} sur {{ $labels.job }}"
+
+      # Mémoire critique
+      - alert: CriticalJvmMemoryUsage
+        expr: (jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}) > 0.95
+        for: 1m
+        labels:
+          severity: critical
+          team: development
+        annotations:
+          summary: "💀 MÉMOIRE CRITIQUE sur {{ $labels.job }}"
+          description: "Mémoire heap: {{ $value | humanizePercentage }} - RISQUE DE OutOfMemoryError!"
+
+  # ========================================
+  # ALERTES HTTP/API
+  # ========================================
+  - name: http_api_alerts
+    rules:
+      # Taux d'erreur HTTP élevé
+      - alert: HighHttpErrorRate
+        expr: (rate(http_server_requests_seconds_count{status=~"4..|5.."}[5m]) / rate(http_server_requests_seconds_count[5m])) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          team: development
+        annotations:
+          summary: "🚫 Taux d'erreur HTTP élevé sur {{ $labels.job }}"
+          description: "{{ $value | humanizePercentage }} d'erreurs HTTP sur {{ $labels.job }} endpoint {{ $labels.uri }}"
+
+      # Latence HTTP élevée
+      - alert: HighHttpLatency
+        expr: histogram_quantile(0.95, rate(http_server_requests_seconds_bucket[5m])) > 2
+        for: 3m
+        labels:
+          severity: warning
+          team: development
+        annotations:
+          summary: "🐌 Latence HTTP élevée sur {{ $labels.job }}"
+          description: "P95 latence: {{ $value }}s sur {{ $labels.job }} endpoint {{ $labels.uri }}"
+
+  # ========================================
+  # ALERTES BASE DE DONNÉES
+  # ========================================
+  - name: database_alerts
+    rules:
+      # Pas de connexions DB actives
+      - alert: NoActiveDatabaseConnections
+        expr: hikaricp_connections_active == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: database
+        annotations:
+          summary: "🔌 Aucune connexion DB active sur {{ $labels.job }}"
+          description: "Le pool de connexions {{ $labels.pool }} n'a aucune connexion active"
+
+      # Pool de connexions saturé
+      - alert: DatabaseConnectionPoolExhausted
+        expr: (hikaricp_connections_active / hikaricp_connections_max) > 0.9
+        for: 2m
+        labels:
+          severity: warning
+          team: database
+        annotations:
+          summary: "🏊 Pool de connexions saturé sur {{ $labels.job }}"
+          description: "Pool {{ $labels.pool }}: {{ $value | humanizePercentage }} de connexions utilisées"
+
+      # Requêtes lentes
+      - alert: SlowDatabaseQueries
+        expr: hikaricp_connections_usage_seconds{quantile="0.95"} > 5
+        for: 2m
+        labels:
+          severity: warning
+          team: database
+        annotations:
+          summary: "🐢 Requêtes DB lentes sur {{ $labels.job }}"
+          description: "P95 temps d'utilisation connexion: {{ $value }}s sur {{ $labels.job }}"
+
+  # ========================================
+  # ALERTES INFRASTRUCTURE SPÉCIFIQUES
+  # ========================================
+  - name: infrastructure_alerts
+    rules:
+      # Config Server indisponible
+      - alert: ConfigServerDown
+        expr: up{job="config_server"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "🏗️ Config Server DOWN - Impact critique!"
+          description: "Le Config Server est indisponible - tous les services peuvent être impactés"
+
+      # Discovery Service (Eureka) down
+      - alert: DiscoveryServiceDown
+        expr: up{job="discovery_service"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "🔍 Discovery Service DOWN - Impact critique!"
+          description: "Eureka est indisponible - la découverte de services est compromise"
+
+      # Gateway down
+      - alert: GatewayDown
+        expr: up{job="gateway"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "🚪 API Gateway DOWN - Accès externe impossible!"
+          description: "La passerelle API est indisponible - les clients ne peuvent plus accéder aux services"
+
+  # ========================================
+  # ALERTES SERVICES MÉTIER
+  # ========================================
+  - name: business_services_alerts
+    rules:
+      # Service métier critique down
+      - alert: CriticalBusinessServiceDown
+        expr: up{service_type="business"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: development
+        annotations:
+          summary: "💼 Service métier {{ $labels.job }} DOWN"
+          description: "Le service métier {{ $labels.application }} est indisponible"
+
+      # Incidents en cours non traités (exemple)
+      - alert: UnprocessedIncidents
+        expr: incident_queue_size > 10
+        for: 5m
+        labels:
+          severity: warning
+          team: operations
+        annotations:
+          summary: "📋 Incidents non traités accumulent"
+          description: "{{ $value }} incidents en attente de traitement"
+
+  # ========================================
+  # ALERTES MESSAGING (MQTT)
+  # ========================================
+  - name: messaging_alerts
+    rules:
+      # MQTT Service down
+      - alert: MqttServiceDown
+        expr: up{job="mqtt_service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: integration
+        annotations:
+          summary: "📡 Service MQTT DOWN"
+          description: "Le service MQTT est indisponible - communication IoT compromise"
+
+      # MQTT Broker down
+      - alert: MqttBrokerDown
+        expr: up{job="mqtt_broker"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "🏢 MQTT Broker DOWN"
+          description: "Le broker Mosquitto est indisponible"
+
+  # ========================================
+  # ALERTES SÉCURITÉ
+  # ========================================
+  - name: security_alerts
+    rules:
+      # Keycloak down
+      - alert: KeycloakDown
+        expr: up{job="keycloak"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: security
+        annotations:
+          summary: "🔐 Keycloak DOWN - Authentification compromise!"
+          description: "Le serveur d'authentification Keycloak est indisponible"
+
+      # Trop de tentatives d'authentification échouées
+      - alert: HighAuthenticationFailures
+        expr: rate(keycloak_login_failures_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "🚨 Tentatives d'auth échouées élevées"
+          description: "{{ $value }} tentatives d'authentification échouées par seconde"

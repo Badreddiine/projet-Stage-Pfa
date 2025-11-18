@@ -1,0 +1,46 @@
+name: Deploy to Development
+
+on:
+  workflow_run:
+    workflows: ["Docker Build & Push"]
+    types: [completed]
+    branches: [master]
+
+jobs:
+  deploy-dev:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    environment: development
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Development Server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEV_SSH_HOST }}
+          username: ${{ secrets.DEV_SSH_USERNAME }}
+          key: ${{ secrets.DEV_SSH_KEY }}
+          script: |
+            cd /opt/sdsgpi
+            docker compose pull config-server discovery-service gateway
+            docker compose up -d --no-deps config-server discovery-service gateway
+            sleep 30
+            docker compose ps
+            curl -f http://localhost:8888/actuator/health || exit 1
+            curl -f http://localhost:8761/actuator/health || exit 1
+            curl -f http://localhost:8080/actuator/health || exit 1
+
+      - name: Deploy to Windows Server (Alternative)
+        if: false
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEV_SSH_HOST }}
+          username: ${{ secrets.DEV_SSH_USERNAME }}
+          key: ${{ secrets.DEV_SSH_KEY }}
+          script: |
+            cd C:\SDSGPI
+            docker-compose pull config-server discovery-service gateway
+            docker-compose up -d --no-deps config-server discovery-service gateway
+            timeout /t 30
+            powershell -File "scripts\health-check.ps1"

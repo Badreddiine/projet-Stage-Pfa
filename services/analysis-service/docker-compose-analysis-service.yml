@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  analysis-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: analysis_service_container
+    hostname: analysis-service
+    ports:
+      - "8085:8085"
+      - "9004:9004"
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+    networks:
+      - sdsgpi_net
+    environment:
+      # Spring Configuration
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_APPLICATION_NAME=analysis-service
+      - SERVER_PORT=8085
+      
+      # Config Server
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
+      - SPRING_CLOUD_CONFIG_USERNAME=admin
+      - SPRING_CLOUD_CONFIG_PASSWORD=admin
+      
+      # Eureka Discovery
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://admin:admin123@discovery-service:8761/eureka/
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
+      - EUREKA_CLIENT_FETCH_REGISTRY=true
+      - EUREKA_CLIENT_ENABLED=true
+      - EUREKA_INSTANCE_HOSTNAME=analysis-service
+      - EUREKA_INSTANCE_INSTANCE_ID=analysis-service:8085
+      
+      # Database Configuration
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres_db:5432/analysis_db
+      - SPRING_DATASOURCE_USERNAME=analysis_user
+      - SPRING_DATASOURCE_PASSWORD=analysis_password
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      
+      # Security Configuration
+      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=http://keycloak:8080/realms/auth-service-realm
+      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI=http://keycloak:8080/realms/auth-service-realm/protocol/openid_connect/certs
+      
+      # Management Endpoints
+      - MANAGEMENT_SERVER_PORT=9004
+      - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,info,metrics,prometheus,eureka
+      - MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS=always
+      
+      # Analysis Service Specific
+      - ANALYSIS_SERVICE_BATCH_SIZE=100
+      - ANALYSIS_SERVICE_CACHE_TTL=3600
+      - ANALYSIS_SERVICE_PREDICTION_ENABLED=true
+      - ANALYSIS_SERVICE_REPORTS_MAX_SIZE=10MB
+      
+      # JVM Options
+      - JAVA_OPTS=-Xmx1g -Xms512m -XX:+UseG1GC
+      
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9004/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      start_period: 120s
+      retries: 10
+    restart: unless-stopped
+    volumes:
+      - analysis_logs:/app/logs
+      - analysis_reports:/app/reports
+
+volumes:
+  analysis_logs:
+    driver: local
+  analysis_reports:
+    driver: local
+
+networks:
+  sdsgpi_net:
+    external: true
+

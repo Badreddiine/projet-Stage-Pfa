@@ -1,0 +1,14 @@
+com\sdsgpi\configservice\controller\HistoriqueConfigurationController.class
+com\sdsgpi\configservice\repository\ConfigurationSystemeRepository.class
+com\sdsgpi\configservice\service\ConfigurationSystemService.class
+com\sdsgpi\configservice\controller\ServiceRegistryController.class
+com\sdsgpi\configservice\repository\ServiceRegistryRepository.class
+com\sdsgpi\configservice\controller\ConfigurationSystemeController.class
+com\sdsgpi\configservice\entity\ConfigurationSysteme.class
+com\sdsgpi\configservice\service\HistoriqueConfigurationService.class
+com\sdsgpi\configservice\entity\ConfigurationService.class
+com\sdsgpi\configservice\service\ServiceRegistryService.class
+com\sdsgpi\configservice\ConfigServiceApplication.class
+com\sdsgpi\configservice\entity\HistoriqueConfiguration.class
+com\sdsgpi\configservice\repository\HistoriqueConfigurationRepository.class
+com\sdsgpi\configservice\entity\ServiceRegistry.class

@@ -1,0 +1,10 @@
+# Ignorer les fichiers et dossiers non nécessaires pour Docker
+target/
+.git/
+.gitignore
+README.md
+*.iml
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

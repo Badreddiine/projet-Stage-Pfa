@@ -1,0 +1,102 @@
+server:
+  port: 8888
+  shutdown: graceful
+
+spring:
+  application:
+    name: config-server
+
+  profiles:
+    active: native
+
+  cloud:
+    config:
+      server:
+        native:
+          # Cherche les configurations dans un dossier 'configurations' à l'intérieur du JAR
+          search-locations: classpath:/configurations
+        bootstrap: false
+
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+  # --- LA CORRECTION CRUCIALE ---
+  # On dit explicitement à Spring Boot de NE PAS essayer de configurer une base de données.
+  # Cela empêchera toute tentative de connexion à Postgres.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
+
+  security:
+    user:
+      # Utilise les variables d'environnement si elles existent, sinon 'admin'/'admin'
+      name: ${CONFIG_SERVER_USERNAME:admin}
+      password: ${CONFIG_SERVER_PASSWORD:admin}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway,prometheus
+
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    org.springframework.cloud.config: INFO
+    root: INFO
+server:
+  port: 8888
+  shutdown: graceful
+
+spring:
+  application:
+    name: config-server
+
+  profiles:
+    active: native
+
+  cloud:
+    config:
+      server:
+        native:
+          # Cherche les configurations dans un dossier 'configurations' à l'intérieur du JAR
+          search-locations: classpath:/configurations
+        bootstrap: false
+
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+  # --- LA CORRECTION CRUCIALE ---
+  # On dit explicitement à Spring Boot de NE PAS essayer de configurer une base de données.
+  # Cela empêchera toute tentative de connexion à Postgres.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
+
+  security:
+    user:
+      # Utilise les variables d'environnement si elles existent, sinon 'admin'/'admin'
+      name: ${CONFIG_SERVER_USERNAME:admin}
+      password: ${CONFIG_SERVER_PASSWORD:admin}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway,prometheus
+
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    org.springframework.cloud.config: INFO
+    root: INFO

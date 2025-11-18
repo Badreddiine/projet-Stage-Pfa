@@ -1,0 +1,62 @@
+# alertmanager.yml
+global:
+  # Assurez-vous que votre conteneur peut joindre ce smarthost.
+  # Si vous n'avez pas de serveur SMTP, vous pouvez commenter ces lignes.
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'alerts@votre-entreprise.com'
+
+route:
+  group_by: ['alertname', 'job']
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 1h
+  # Le récepteur par défaut pour toutes les alertes
+  receiver: 'email-and-slack'
+
+receivers:
+  - name: 'email-and-slack'
+    email_configs:
+      - to: 'admin@votre-entreprise.com'
+        # Le champ 'send_resolved: true' est utile pour recevoir une notification
+        # quand une alerte est résolue.
+        send_resolved: true
+        # 'subject' et 'html' doivent être indentés sous 'email_configs'
+        subject: '[ALERTE] {{ .GroupLabels.alertname }} - {{ .Status | toUpper }}'
+        html: |
+          <h1>Alerte: {{ .GroupLabels.alertname }}</h1>
+          <p><strong>Statut:</strong> {{ .Status }}</p>
+          <h3>Alertes:</h3>
+          <ul>
+          {{ range .Alerts }}
+            <li>
+              <strong>Résumé:</strong> {{ .Annotations.summary }}  
+
+              <strong>Description:</strong> {{ .Annotations.description }}  
+
+              <strong>Labels:</strong>
+              <ul>
+              {{ range .Labels.SortedPairs }}
+                <li>{{ .Name }}: {{ .Value }}</li>
+              {{ end }}
+              </ul>
+            </li>
+          {{ end }}
+          </ul>
+
+    slack_configs:
+      # N'oubliez pas de remplacer cette URL par votre vrai Webhook Slack
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#alerts'
+        send_resolved: true
+        # Utilisation des "blocks" pour un meilleur formatage dans Slack
+        blocks:
+          - type: 'header'
+            text:
+              type: 'plain_text'
+              text: ':warning: [{{ .Status | toUpper }}] - {{ .CommonAnnotations.summary }}'
+          - type: 'section'
+            fields:
+              - type: 'mrkdwn'
+                text: '*Description:*\n{{ .CommonAnnotations.description }}'
+              - type: 'mrkdwn'
+                text: '*Nom de l''alerte:*\n{{ .CommonLabels.alertname }}'

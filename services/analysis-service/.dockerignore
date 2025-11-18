@@ -1,0 +1,43 @@
+# Fichiers et dossiers à ignorer lors de la construction Docker
+
+# Fichiers de build Maven
+target/
+!target/analysis-service-1.0.0.jar
+
+# Fichiers IDE
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Fichiers temporaires
+*.tmp
+*.temp
+
+# Fichiers de configuration locale
+application-local.properties
+application-dev.properties
+
+# Documentation
+README.md
+INTEGRATION_GUIDE.md
+docs/
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+

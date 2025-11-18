@@ -1,0 +1,475 @@
+services:
+  # --- INFRASTRUCTURE DE BASE ---
+  postgres_db:
+    image: postgres:15
+    container_name: postgres_db_container
+    hostname: postgres_db
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: adminpass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - sdsgpi_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  config-server:
+    build:
+      context: "./services/config server/config-server"
+    container_name: config_server_container
+    hostname: config-server
+    ports:
+      - "8888:8888"
+    environment:
+      - SPRING_PROFILES_ACTIVE=native
+      - CONFIG_SERVER_USERNAME=admin
+      - CONFIG_SERVER_PASSWORD=admin
+    # --- LA SECTION 'volumes:' EST SUPPRIMÉE ---
+    networks:
+      - sdsgpi_net
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8888/actuator/health" ]
+      interval: 15s
+      timeout: 10s
+      start_period: 60s
+      retries: 10
+
+
+  discovery-service:
+    build:
+      context: ./services/discovery
+    container_name: discovery_service_container
+    hostname: discovery-service
+    ports:
+      - "8761:8761"
+    depends_on:
+      config-server:
+        condition: service_healthy
+    networks:
+      - sdsgpi_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      start_period: 60s
+      retries: 10
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: keycloak_container
+    hostname: keycloak
+    volumes:
+      - ./keycloak.config.json:/opt/keycloak/data/import/realm-config.json
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres_db:5432/keycloak_db
+      KC_DB_USERNAME: keycloak_user
+      KC_DB_PASSWORD: password
+      KC_DB_SCHEMA: public
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+    command: [ "start-dev", "--import-realm" ]
+    ports:
+      - "8181:8080"
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - sdsgpi_net
+    restart: unless-stopped
+#    healthcheck:
+#      test: [ "CMD-SHELL", "curl -f http://localhost:8080/health/ready || exit 1" ]
+#      interval: 15s
+#      timeout: 5s
+#      start_period: 120s
+#      retries: 5
+
+  gateway:
+    build:
+      context: ./services/gateway
+    container_name: gateway_container
+    hostname: gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docke
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      # keycloak:
+      #   condition: service_healthy
+    networks:
+      - sdsgpi_net
+    restart: unless-stopped
+    # entrypoint: ["sh", "-c", "auntil curl -f http://keycloak:8181/realms/auth-service-realm; do echo '⏳ Waiting for Keycloak...'; sleep 5; done; java -jar app.jar"]
+
+
+  equipment-service:
+    build:
+      context: ./services/equipement-service
+    container_name: equipment_service_container
+    hostname: equipment-service
+    ports:
+      - "8082:8082"
+      - "9001:9001"
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - sdsgpi_net
+    restart: unless-stopped
+    environment:
+      - SPRING_APPLICATION_NAME=equipment-service
+      - SERVER_PORT=8082
+      - MANAGEMENT_SERVER_PORT=9001
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
+      - SPRING_CLOUD_CONFIG_USERNAME=admin
+      - SPRING_CLOUD_CONFIG_PASSWORD=admin
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://admin:admin123@discovery-service:8761/eureka/
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres_db:5432/equipment_db
+      - SPRING_DATASOURCE_USERNAME=equipment_user
+      - SPRING_DATASOURCE_PASSWORD=equipment_password
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+#    healthcheck:
+#      test: ["CMD", "curl", "-f", "http://localhost:9001/actuator/health"]
+#      interval: 15s
+#      timeout: 10s
+#      start_period: 120s
+#      retries: 10
+
+  user-service:
+    build:
+      context: ./services/user-service
+    container_name: user_service_container
+    hostname: user-service
+    ports:
+      - "8084:8084"
+      - "9002:9002"
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - sdsgpi_net
+    restart: unless-stopped
+    environment:
+      - SPRING_APPLICATION_NAME=user-service
+      - SERVER_PORT=8084
+      - MANAGEMENT_SERVER_PORT=9002
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
+      - SPRING_CLOUD_CONFIG_USERNAME=admin
+      - SPRING_CLOUD_CONFIG_PASSWORD=admin
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://admin:admin123@discovery-service:8761/eureka/
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres_db:5432/user_db
+      - SPRING_DATASOURCE_USERNAME=user_user
+      - SPRING_DATASOURCE_PASSWORD=user_password
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9002/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      start_period: 120s
+      retries: 10
+  notification-service:
+    build:
+      context: ./services/notification-microservice
+    container_name: notification_service_container
+    hostname: notification-service
+    ports:
+      - "8083:8083"
+      - "9003:9003"
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - sdsgpi_net
+    restart: unless-stopped
+    environment:
+      # --- Configuration générale ---
+      - SPRING_APPLICATION_NAME=notification-service
+      - SERVER_PORT=8083
+      - MANAGEMENT_SERVER_PORT=9003
+
+      # --- Configuration du Config Server ---
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
+      - SPRING_CLOUD_CONFIG_USERNAME=admin
+      - SPRING_CLOUD_CONFIG_PASSWORD=admin
+
+      # --- Configuration Eureka ---
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://admin:admin123@discovery-service:8761/eureka/
+
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9003/actuator/health" ]
+      interval: 15s
+      timeout: 10s
+      start_period: 120s
+      retries: 10
+
+  incident-service:
+    build:
+      context: ./services/incident-service
+    container_name: incident_service_container
+    hostname: incident-service
+    ports:
+      - "8085:8085" # Port de l'application
+      - "9004:9004" # Port de management (Actuator)
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - sdsgpi_net
+    restart: unless-stopped
+    environment:
+      - SPRING_APPLICATION_NAME=incident-service
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
+      - SPRING_CLOUD_CONFIG_USERNAME=admin
+      - SPRING_CLOUD_CONFIG_PASSWORD=admin
+    healthcheck:
+      # Vérifie si le service est en bonne santé via son endpoint Actuator
+      test: [ "CMD", "curl", "-f", "http://localhost:9004/actuator/health" ]
+      interval: 15s
+      timeout: 10s
+      start_period: 120s
+      retries: 10
+
+
+  pgadmin:
+    container_name: pgadmin_container
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - sdsgpi_net
+
+  prometheus:
+    image: prom/prometheus:v2.37.1
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml
+    networks:
+      - sdsgpi_net
+  analysis-service:
+    build:
+      context: ./services/analysis-service
+    container_name: analysis_service_container
+    hostname: analysis-service
+    ports:
+      - "8086:8086"
+      - "9006:9006"
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - sdsgpi_net
+    restart: unless-stopped
+    environment:
+      # --- Configuration générale ---
+      - SPRING_APPLICATION_NAME=analysis-service
+      - SERVER_PORT=8086
+      - MANAGEMENT_SERVER_PORT=9006
+
+      # --- Configuration du Config Server ---
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
+      - SPRING_CLOUD_CONFIG_USERNAME=admin
+      - SPRING_CLOUD_CONFIG_PASSWORD=admin
+
+      # --- Configuration Eureka ---
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://admin:admin123@discovery-service:8761/eureka/
+
+      # --- Configuration de la base de données ---
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres_db:5432/analysis_db
+      - SPRING_DATASOURCE_USERNAME=analysis_user
+      - SPRING_DATASOURCE_PASSWORD=analysis_password
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9006/actuator/health" ]
+      interval: 15s
+      timeout: 10s
+      start_period: 120s
+      retries: 10
+
+  config-service:
+    build:
+      context: ./services/config-service
+      dockerfile: Dockerfile
+    container_name: config_service_container
+    hostname: config-service
+    ports:
+      - "8088:8088"
+    # Les dépendances sont toujours cruciales pour l'ordre de démarrage
+    depends_on:
+      config-server:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - sdsgpi_net
+    restart: unless-stopped
+    # La section 'environment' est maintenant vide de toute configuration Spring.
+    environment: { }
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8088/actuator/health" ]
+      interval: 15s
+      timeout: 10s
+      start_period: 120s
+      retries: 10
+
+
+
+  mqtt-service:
+    build:
+      context: ./services/mqtt-service
+      args:
+        - JAR_FILE=target/mqtt-service-1.0.0.jar
+    container_name: mqtt_service_container
+    hostname: mqtt-service
+    ports:
+      - "8087:8087"
+      - "9007:9007"
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      postgres_db:
+        condition: service_healthy
+      mqtt-broker:
+        condition: service_started
+    networks:
+      - sdsgpi_net
+    restart: unless-stopped
+    environment:
+      # Config Server
+      - SPRING_CONFIG_IMPORT=configserver:http://config-server:8888
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_APPLICATION_NAME=mqtt-service
+      - SPRING_CLOUD_CONFIG_USERNAME=admin
+      - SPRING_CLOUD_CONFIG_PASSWORD=admin
+
+      # Valeurs de secours si Config Server ne renvoie pas les infos
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres_db:5432/mqtt_db
+      - SPRING_DATASOURCE_USERNAME=mqtt_user
+      - SPRING_DATASOURCE_PASSWORD=mqtt_password
+      - SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver
+      - mqtt.broker.username=mqtt_user
+      - mqtt.broker.password=mqtt_password
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9007/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      start_period: 120s
+      retries: 10
+
+    # --- SERVICE MQTT BROKER ---
+  mqtt-broker:
+    image: eclipse-mosquitto:2.0
+    container_name: mqtt_broker_container
+    hostname: mqtt-broker
+    ports:
+      - "1883:1883"  # Port standard MQTT
+      - "9008:9001"
+    volumes:
+      # Ces chemins doivent correspondre aux dossiers que vous avez créés
+      # à la racine de votre projet.
+      - ./mqtt/config:/mosquitto/config
+      - ./mqtt/data:/mosquitto/data
+      - ./mqtt/log:/mosquitto/log
+    networks:
+      - sdsgpi_net
+    restart: unless-stopped
+    healthcheck:
+      # Test simple pour vérifier que le broker est en cours d'exécution
+      # Note : mosquitto_pub/sub n'est pas inclus dans l'image de base 2.0+
+      # Un test plus robuste nécessiterait une image personnalisée ou un outil externe.
+      # Pour l'instant, nous nous assurons que le processus est en cours.
+      test: [ "CMD-SHELL", "mosquitto_sub -h localhost -t '$$SYS/broker/version' -C 1 -W 2 || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+  alertmanager:
+    image: prom/alertmanager:v0.24.0
+    container_name: alertmanager
+    ports:
+      - "9099:9099"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    networks:
+      - sdsgpi_net
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana-oss:8.5.2
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    volumes:
+      - ./grafana:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=password
+    networks:
+      - sdsgpi_net
+
+networks:
+  sdsgpi_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local

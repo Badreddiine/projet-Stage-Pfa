@@ -1,0 +1,33 @@
+name: Deploy to Staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to deploy'
+        required: true
+        default: 'latest'
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Staging Server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_SSH_HOST }}
+          username: ${{ secrets.STAGING_SSH_USERNAME }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            cd /opt/sdsgpi
+            docker compose config > docker-compose.backup.yml
+            export VERSION=${{ github.event.inputs.version }}
+            docker compose pull
+            docker compose up -d --no-deps config-server discovery-service gateway
+            sleep 60
+            ./scripts/health-check.sh || (docker compose -f docker-compose.backup.yml up -d && exit 1)
+            echo "Déploiement staging réussi"

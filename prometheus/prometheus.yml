@@ -1,0 +1,140 @@
+global:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+
+scrape_configs:
+  # Configuration Server
+  - job_name: 'config_server'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['config-server:8888']
+        labels:
+          application: 'Config Server Application'
+          service_type: 'infrastructure'
+    basic_auth:
+      username: admin
+      password: admin
+
+  # Discovery Service (Eureka)
+  - job_name: 'discovery_service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['discovery-service:8761']
+        labels:
+          application: 'Discovery Service Application'
+          service_type: 'infrastructure'
+    basic_auth:
+      username: admin
+      password: admin123
+
+  # API Gateway
+  - job_name: 'gateway'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['gateway:8080']
+        labels:
+          application: 'Gateway Service Application'
+          service_type: 'infrastructure'
+
+  # Equipment Service
+  - job_name: 'equipment_service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['equipment-service:9001']
+        labels:
+          application: 'Equipment Service Application'
+          service_type: 'business'
+
+  # User Service
+  - job_name: 'user_service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['user-service:9002']
+        labels:
+          application: 'User Service Application'
+          service_type: 'business'
+
+  # Notification Service
+  - job_name: 'notification_service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['notification-service:9003']
+        labels:
+          application: 'Notification Service Application'
+          service_type: 'business'
+
+  # Incident Service
+  - job_name: 'incident_service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['incident-service:9004']
+        labels:
+          application: 'Incident Service Application'
+          service_type: 'business'
+
+  # Analysis Service
+  - job_name: 'analysis_service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['analysis-service:9006']
+        labels:
+          application: 'Analysis Service Application'
+          service_type: 'business'
+
+  # Config Service (différent du Config Server)
+  - job_name: 'config_service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['config-service:8088']
+        labels:
+          application: 'Config Service Application'
+          service_type: 'business'
+
+  # MQTT Service
+  - job_name: 'mqtt_service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['mqtt-service:9007']
+        labels:
+          application: 'MQTT Service Application'
+          service_type: 'integration'
+
+  # PostgreSQL Database
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres_db:5432']
+        labels:
+          application: 'PostgreSQL Database'
+          service_type: 'database'
+    # Note: Pour PostgreSQL, vous devrez installer postgres_exporter
+    # Voir la section commentée ci-dessous pour l'ajouter
+
+  # Keycloak (si métriques activées)
+  - job_name: 'keycloak'
+    metrics_path: '/auth/realms/master/metrics'
+    static_configs:
+      - targets: ['keycloak:8080']
+        labels:
+          application: 'Keycloak Authentication'
+          service_type: 'security'
+
+  # MQTT Broker Mosquitto (si métriques activées)
+  - job_name: 'mqtt_broker'
+    static_configs:
+      - targets: ['mqtt-broker:9008']
+        labels:
+          application: 'MQTT Broker Mosquitto'
+          service_type: 'messaging'
+    # Note: Mosquitto n'expose pas de métriques Prometheus par défaut
+    # Vous devrez configurer un exporter ou utiliser mosquitto_exporter
+
+# Règles d'alerte (optionnel)
+rule_files:
+# - "alert_rules.yml"
+
+# Configuration Alertmanager (optionnel)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           - alertmanager:9093

@@ -1,0 +1,308 @@
+
+services:
+  # --- INFRASTRUCTURE DE BASE ---
+  postgres_db:
+    image: postgres:13
+    container_name: postgres_db_container
+    hostname: postgres_db
+    environment:
+      POSTGRES_DB: keycloak_db
+      POSTGRES_USER: keycloak_user
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - sdsgpi_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak_user -d keycloak_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # --- SERVICES SPRING CLOUD ---
+  config-server:
+    build:
+      context: "./services/config server/config-server"
+    container_name: config_server_container
+    hostname: config-server
+    ports:
+      - "8888:8888"
+    environment:
+      - CONFIG_SERVER_USERNAME=admin
+      - CONFIG_SERVER_PASSWORD=admin
+    volumes:
+      - "./services/config server/config-server/configurations:/app/configurations"
+    networks:
+      - sdsgpi_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      start_period: 60s
+      retries: 10
+
+  discovery-service:
+    build:
+      context: ./services/discovery
+    container_name: discovery_service_container
+    hostname: discovery-service
+    ports:
+      - "8761:8761"
+    depends_on:
+      config-server:
+        condition: service_healthy
+    environment:
+      # Configuration Eureka Server avec authentification
+      - EUREKA_INSTANCE_HOSTNAME=discovery-service
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=false
+      - EUREKA_CLIENT_FETCH_REGISTRY=false
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://discovery-service:8761/eureka/
+      - SPRING_SECURITY_USER_NAME=admin
+      - SPRING_SECURITY_USER_PASSWORD=admin123
+      - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,info,metrics
+      - MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS=always
+      - LOGGING_LEVEL_COM_NETFLIX_EUREKA=DEBUG
+      - LOGGING_LEVEL_COM_NETFLIX_DISCOVERY=DEBUG
+    networks:
+      - sdsgpi_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      start_period: 60s
+      retries: 10
+
+  # --- KEYCLOAK ---
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: keycloak_container
+    hostname: keycloak
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres_db:5432/keycloak_db
+      KC_DB_USERNAME: keycloak_user
+      KC_DB_PASSWORD: password
+      KC_DB_SCHEMA: public
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+    command: ["start-dev"]
+    ports:
+      - "8181:8080"
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - sdsgpi_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      start_period: 120s
+      retries: 5
+
+  # --- GATEWAY ---
+  gateway:
+    build:
+      context: ./services/gateway
+    container_name: gateway_container
+    hostname: gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+    environment:
+      # Configuration de base
+      - SPRING_APPLICATION_NAME=gateway
+      - SERVER_PORT=8080
+
+      # Configuration Eureka avec authentification
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://admin:admin123@discovery-service:8761/eureka/
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
+      - EUREKA_CLIENT_FETCH_REGISTRY=true
+      - EUREKA_CLIENT_ENABLED=true
+      - EUREKA_INSTANCE_HOSTNAME=gateway
+      - EUREKA_INSTANCE_INSTANCE_ID=gateway:8080
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
+
+      # Configuration Management/Actuator
+      - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,info,gateway,metrics
+      - MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS=always
+      - MANAGEMENT_ENDPOINT_GATEWAY_ENABLED=true
+      - MANAGEMENT_ENDPOINTS_WEB_BASE_PATH=/actuator
+
+      # Configuration Spring Cloud Gateway
+      - SPRING_CLOUD_GATEWAY_DISCOVERY_LOCATOR_ENABLED=true
+      - SPRING_CLOUD_GATEWAY_DISCOVERY_LOCATOR_LOWER_CASE_SERVICE_ID=true
+
+      # Configuration Logging
+      - LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_CLOUD_GATEWAY=DEBUG
+      - LOGGING_LEVEL_COM_NETFLIX_EUREKA=DEBUG
+      - LOGGING_LEVEL_COM_NETFLIX_DISCOVERY=DEBUG
+      - LOGGING_LEVEL_ROOT=INFO
+
+      # Configuration Profils
+      - SPRING_PROFILES_ACTIVE=docker
+
+      # Configuration Spring Boot 3.x
+      - SPRING_MAIN_WEB_APPLICATION_TYPE=reactive
+      - SPRING_CLOUD_GATEWAY_ENABLED=true
+
+    networks:
+      - sdsgpi_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 5
+
+  # --- SERVICE MÉTIER ---
+  equipment-service:
+    build:
+      context: ./services/equipement-service
+    container_name: equipment_service_container
+    hostname: equipment-service
+    ports:
+      - "8082:8082"
+      - "9001:9001"
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      postgres_db:
+        condition: service_healthy
+    environment:
+      # Configuration de base
+      - SPRING_APPLICATION_NAME=equipment-service
+      - SERVER_PORT=8082
+      - MANAGEMENT_SERVER_PORT=9001
+
+      # Configuration Eureka avec authentification
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://admin:admin123@discovery-service:8761/eureka/
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
+      - EUREKA_CLIENT_FETCH_REGISTRY=true
+      - EUREKA_CLIENT_ENABLED=true
+      - EUREKA_INSTANCE_HOSTNAME=equipment-service
+      - EUREKA_INSTANCE_INSTANCE_ID=equipment-service:8082
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
+      - EUREKA_INSTANCE_LEASE_RENEWAL_INTERVAL_IN_SECONDS=30
+      - EUREKA_INSTANCE_LEASE_EXPIRATION_DURATION_IN_SECONDS=90
+      - EUREKA_INSTANCE_HEALTH_CHECK_URL_PATH=/actuator/health
+      - EUREKA_INSTANCE_STATUS_PAGE_URL_PATH=/actuator/info
+
+      # Configuration Management/Actuator
+      - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,info,metrics,eureka
+      - MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS=always
+      - MANAGEMENT_ENDPOINTS_WEB_BASE_PATH=/actuator
+      - MANAGEMENT_HEALTH_EUREKA_ENABLED=true
+      - MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED=true
+
+      # Configuration Base de données
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres_db:5432/equipment_db
+      - SPRING_DATASOURCE_USERNAME=equipment_user
+      - SPRING_DATASOURCE_PASSWORD=equipment_password
+      - SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SPRING_JPA_SHOW_SQL=false
+      - SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT=org.hibernate.dialect.PostgreSQLDialect
+
+      # Configuration Swagger - DÉSACTIVÉ pour éviter les erreurs
+      - SPRINGDOC_SWAGGER_UI_ENABLED=false
+      - SPRINGDOC_API_DOCS_ENABLED=false
+
+      # Configuration CORS - Simplifié
+      - CORS_ALLOWED_ORIGINS=http://localhost:4200,http://localhost:8080,http://localhost:3000
+      - CORS_ALLOWED_METHODS=GET,POST,PUT,DELETE,OPTIONS,PATCH
+      - CORS_ALLOWED_HEADERS=*
+      - CORS_ALLOW_CREDENTIALS=true
+
+      # Configuration Profils
+      - SPRING_PROFILES_ACTIVE=docker
+
+      # Configuration Logging
+      - LOGGING_LEVEL_COM_NETFLIX_EUREKA=DEBUG
+      - LOGGING_LEVEL_COM_NETFLIX_DISCOVERY=DEBUG
+      - LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_CLOUD=DEBUG
+      - LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_BOOT_ACTUATE=INFO
+      - LOGGING_LEVEL_ROOT=INFO
+
+      # Configuration Spring Boot 3.x
+      - SPRING_MAIN_WEB_APPLICATION_TYPE=servlet
+      - SPRING_JPA_OPEN_IN_VIEW=false
+
+    networks:
+      - sdsgpi_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9001/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 180s
+      retries: 5
+
+  # --- OUTILS ---
+  pgadmin:
+    container_name: pgadmin_container
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - sdsgpi_net
+
+  prometheus:
+    image: prom/prometheus:v2.37.1
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - sdsgpi_net
+
+  grafana:
+    image: grafana/grafana-oss:8.5.2
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    volumes:
+      - ./grafana:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=password
+    networks:
+      - sdsgpi_net
+
+networks:
+  sdsgpi_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local

@@ -1,0 +1,151 @@
+server:
+  port: 8083
+  servlet:
+    context-path: /notification-service
+
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres_db:5432/notification_db
+    driver-class-name: org.postgresql.Driver
+    username: notification_user
+    password: notification_password
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    time-zone: Europe/Paris
+
+  task:
+    scheduling:
+      enabled: true
+    execution:
+      pool:
+        core-size: 5
+        max-size: 10
+        queue-capacity: 100
+
+mqtt:
+  broker:
+    url: tcp://localhost:1883
+  client:
+    id: notification-service
+  username: ""
+  password: ""
+  topics:
+    notifications: "notifications/+"
+    status: "status/+"
+    errors: "errors/+"
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://admin:admin123@discovery-service:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+
+logging:
+  level:
+    com.notification: DEBUG
+    org.springframework.web: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/notification-service.log
+
+notification:
+  processing:
+    batch-size: 100
+    retry-attempts: 3
+    retry-delay: 5000
+  cleanup:
+    old-messages-days: 30
+    cleanup-schedule: "0 0 2 * * ?"
+  mqtt:
+    reconnect-attempts: 5
+    reconnect-delay: 10000
+    keep-alive: 60
+    connection-timeout: 30
+
+---
+# Profil de développement
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: jdbc:h2:file:./data/notificationdb
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+logging:
+  level:
+    root: INFO
+    com.notification: DEBUG
+
+---
+# Profil de production
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    url: jdbc:postgresql://postgres_db:5432/notification_db
+    username: ${DB_USERNAME:notification_user}
+    password: ${DB_PASSWORD:notification_password}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+mqtt:
+  broker:
+    url: ${MQTT_BROKER_URL:tcp://mqtt-broker:1883}
+  username: ${MQTT_USERNAME:}
+  password: ${MQTT_PASSWORD:}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://admin:admin123@discovery-service:8761/eureka/
+
+logging:
+  level:
+    root: WARN
+    com.notification: INFO
+  file:
+    name: /var/log/notification-service/application.log
+
+

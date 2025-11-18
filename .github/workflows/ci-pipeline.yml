@@ -1,0 +1,28 @@
+name: CI Pipeline - Microservices
+
+on:
+  push:
+    branches: [ master, develop ]
+  pull_request:
+    branches: [ master, develop ]
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      config-server: ${{ steps.changes.outputs.config-server }}
+      discovery: ${{ steps.changes.outputs.discovery }}
+      gateway: ${{ steps.changes.outputs.gateway }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v2
+        id: changes
+        with:
+          base: master
+          filters: |
+            config-server:
+              - 'services/config server/**'
+            discovery:
+              - 'services/discovery/**'
+            gateway:
+              - 'services/gateway/**'
